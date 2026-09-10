@@ -1,49 +1,76 @@
-# ROS/Arduino Serial Motor Demo
+# ROS 2 / Arduino Serial Motor Demo
 
-This is demonstration of a ROS 2 interface to an Arduino running differential-drive motor control code.
+A ROS 2 interface to differential-drive motor firmware over serial, with a Tkinter GUI for sending commands and viewing encoder feedback.
 
-The corresponding Arduino code can be found [here](https://github.com/joshnewans/ros_arduino_bridge), which is itself a fork of [this repo](https://github.com/hbrobotics/ros_arduino_bridge), which also contains a similar implementation for the ROS/Python/Client side (ROS 1 though).
+## Provenance
+
+This repository contains tutorial-derived code with Josh Newans listed in its package metadata. It is retained as a learning/reference integration project. The existing attribution is preserved; the repository does not establish which parts were independently authored by Sushan Mali.
+
+The corresponding firmware is linked by the original project: [Josh Newans' ros_arduino_bridge](https://github.com/joshnewans/ros_arduino_bridge), derived from [HB Robotics' bridge](https://github.com/hbrobotics/ros_arduino_bridge).
 
 ## Components
 
-The `serial_motor_demo` package consists of two nodes, `driver.py` and `gui.py`. The idea is that the driver can be run on an onboard PC inside a robot (e.g. a Raspberry Pi), interfacing with the lower-level hardware. The driver exposes motor control through ROS topics (see below), which are to be published by the user's software.
+| Package | Role |
+| --- | --- |
+| `serial_motor_demo` | Python serial driver and Tkinter GUI |
+| `serial_motor_demo_msgs` | Motor commands, measured velocities and encoder-count messages |
 
-The GUI provides a simple interface for development and testing of such a system. It publishes and subscribes to the appropriate topics.
+The driver sends carriage-return-terminated commands: `o` for PWM, `m` for counts per firmware loop, and `e` to read encoders. The Arduino firmware performs the low-level motor control.
 
+## Build
 
-## Driver configuration & usage
+Use a configured ROS 2 environment with `colcon` and `rosdep`, plus Python serial and Tkinter dependencies.
 
-The driver has a few parameters:
-
-- `encoder_cpr` - Encoder counts per revolution
-- `loop_rate` - Execution rate of the *Arduino* code (see Arduino side documentation for details)
-- `serial_port` - Serial port to connect to (default `/dev/ttyUSB0`)
-- `baud_rate` - Serial baud rate (default `57600`)
-- `serial_debug` - Enables debugging of serial commands (default `false`)
-
-To run, e.g.
+```bash
+mkdir -p ~/serial_motor_ws/src
+cd ~/serial_motor_ws/src
+git clone https://github.com/sushanmali50/serial_motor_demo.git
+cd ..
+rosdep install --from-paths src --ignore-src -r -y
+sudo apt install python3-serial python3-tk
+colcon build --symlink-install
+source install/setup.bash
 ```
+
+Flash the compatible external Arduino firmware separately. Match serial permissions, baud rate, encoder counts, and firmware loop rate to your hardware.
+
+## Run
+
+The numeric parameters below are examples from the original README. Replace them with the actual values for your motors and firmware.
+
+```bash
 ros2 run serial_motor_demo driver --ros-args -p encoder_cpr:=3440 -p loop_rate:=30 -p serial_port:=/dev/ttyUSB0 -p baud_rate:=57600
 ```
 
-It makes use of the following topics
-- `motor_command` - Subscribes a `MotorCommand`, in rads/sec for each of the two motors
-- `motor_vels` - Publishes a `MotorVels`, motor velocities in rads/sec
-- `encoder_vals` - Publishes an `EncoderVals`, raw encoder counts for each motor
+In a second sourced terminal:
 
+```bash
+ros2 run serial_motor_demo gui
+```
 
+| Parameter | Meaning |
+| --- | --- |
+| `encoder_cpr` | Counts per revolution; must be positive |
+| `loop_rate` | Arduino control-loop rate; must be positive |
+| `serial_port` | Default `/dev/ttyUSB0` |
+| `baud_rate` | Default 57600 |
+| `serial_debug` | Log transmitted and received commands |
 
-## GUI Usage
+| Topic | Message | Units |
+| --- | --- | --- |
+| `motor_command` | `MotorCommand` | rad/s, or raw PWM when `is_pwm` is true |
+| `motor_vels` | `MotorVels` | rad/s |
+| `encoder_vals` | `EncoderVals` | Raw counts |
 
-Has two modes, one for raw PWM input (-255 to 255) and one for closed-loop control. In this mode you must first set the limits for the sliders.
+The GUI displays rev/s and converts to rad/s. Its PWM mode accepts -255 to 255.
 
+## Known limitations
 
-## TODO
+- Default encoder/loop-rate parameters are zero; running unchanged can cause division by zero.
+- The original GUI can fail when switching to feedback mode with an empty speed-limit field.
+- Serial-response validation, command timeout behavior and shutdown handling need further work.
+- Exact tested ROS/firmware versions are not recorded, and hardware execution has not been revalidated during documentation cleanup.
 
-- Add service for encoder reset
-- Add service for updating PID parameters
-- Stability improvements
-- More parameterisation
+## Original project TODOs
 
-
-
+Encoder-reset service, PID-parameter update service, stability improvements, and further parameterization.
